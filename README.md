@@ -1,5 +1,5 @@
 # docusum-ai
-Aplikasi untuk meringkas dokumen Tugas Akhir (TA)
+Meringkas dokumen Tugas Akhir (TA)
 
 Jalankan pada terminal:
 - setx GOOGLE_API_KEY "AIzaSyAmwg5i1a3j5a1RkWtUvYmCLpqS6Fp58Qk"
