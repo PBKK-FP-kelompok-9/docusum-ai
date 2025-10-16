@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Hasil Ringkasan — DocuSum AI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+
+  <style>
+    .big-frame {
+      background: white;
+      border-radius: 12px;
+      padding: 25px;
+      border: 1px solid rgba(0,0,0,0.12);
+      margin-top: 10px;
+      line-height: 1.7;
+    }
+    .big-frame h3 {
+      margin-top: 18px;
+      margin-bottom: 8px;
+      font-weight: 700;
+      color: #333;
+    }
+    .download-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wavy-bg">
+    <div class="wave wave-1"></div>
+    <div class="wave wave-2"></div>
+    <div class="wave wave-3"></div>
+  </div>
+
+  <div class="container">
+    <header class="header">
+      <h1>📄 Hasil Ringkasan</h1>
+      <p class="muted">Hasil ringkasan dokumen Anda:</p>
+    </header>
+
+    <div style="display:flex;justify-content:flex-end;margin-bottom:15px;">
+      <a href="index.html" class="btn-secondary">⬅️ Kembali ke Upload</a>
+    </div>
+
+    <main id="resultsContainer"></main>
+  </div>
+
+  <script>
+    const BASE_API = "http://127.0.0.1:8000";
+    const container = document.getElementById("resultsContainer");
+
+    function escapeHTML(t = "") {
+      return t.replace(/[&<>"']/g, m => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[m]));
+    }
+
+    function downloadFile(url) {
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+
+    function render() {
+      let results = JSON.parse(sessionStorage.getItem("docuSumResults") || "[]");
+      if (!results.length) {
+        container.innerHTML = `<p style="text-align:center;color:gray;">Belum ada hasil.</p>`;
+        return;
+      }
+
+      container.innerHTML = results.map(doc => {
+        const pdfLink = doc.download_pdf ? `${BASE_API}${doc.download_pdf}` : null;
+        const docxLink = doc.download_docx ? `${BASE_API}${doc.download_docx}` : null;
+
+        const downloadButtons = `
+		<div class="download-bar">
+		  ${pdfLink ? `<button class="btn-primary" onclick="downloadFile('${pdfLink}')">📥 Download PDF</button>` : ""}
+          ${docxLink ? `<button class="btn-primary" onclick="downloadFile('${docxLink}')">📥 Download DOCX</button>` : ""}
+	   </div>
+        `;
+
+        const sections = (doc.sections || [])
+          .filter(s => s.ringkasan_bab?.trim())
+          .map(s => `
+            <h3>${escapeHTML(s.judul)}</h3>
+            <p>${escapeHTML(s.ringkasan_bab)}</p>
+          `).join("");
+
+        return `
+          <div class="result-card">
+            <div class="file-item">
+              <div class="file-info">
+                <div class="file-icon">📄</div>
+                <div class="file-details">
+                  <h4>${escapeHTML(doc.file)}</h4>
+                </div>
+                <div class="file-status">
+                  <span class="status-completed">✅ Selesai diproses</span>
+                </div>
+              </div>
+            </div>
+
+            ${downloadButtons}
+
+            <div class="big-frame">
+              ${sections}
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    render();
+  </script>
+</body>
+</html>
