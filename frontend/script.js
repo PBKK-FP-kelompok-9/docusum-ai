@@ -23,9 +23,16 @@ class ToastManager {
 
 // File Uploader
 class FileUploader {
-    constructor() {
+    /*constructor() {
         this.uploadedFiles = [];
         this.processedResults = []; // simpan ringkasan
+        this.init();
+    }*/
+    constructor() {
+        this.uploadedFiles = [];
+        this.processedResults = [];
+        this.currentProcessingIndex = 0;
+        this.totalFilesToProcess = 0;
         this.init();
     }
 
@@ -146,7 +153,7 @@ class FileUploader {
         ToastManager.showToast('Daftar file dibersihkan', 'info');
     }
 
-    async processFiles() {
+    /*async processFiles() {
         this.processBtn.disabled = true;
         this.processBtn.textContent = '⏳ Memproses...';
         this.processedResults = [];
@@ -158,9 +165,102 @@ class FileUploader {
 
         sessionStorage.setItem('docuSumResults', JSON.stringify(this.processedResults));
         window.location.href = "result.html";
+    }*/
+    async processFiles() {
+        this.processBtn.disabled = true;
+        this.currentProcessingIndex = 0;
+        this.totalFilesToProcess = this.uploadedFiles.length;
+        this.processedResults = [];
+
+        // Update button dengan progress indicator
+        this.processBtn.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <div class="progress-circle"></div>
+                <span>Memproses... 0%</span>
+            </div>
+        `;
+
+        // Tambah progress container di upload list
+        this.createProgressContainer();
+
+        for (const fileItem of this.uploadedFiles) {
+            const result = await this.sendToBackend(fileItem.file);
+            this.processedResults.push(result);
+            
+            // Update progress
+            this.currentProcessingIndex++;
+            this.updateProgress();
+        }
+        sessionStorage.setItem('docuSumResults', JSON.stringify(this.processedResults));
+        window.location.href = "result.html";
     }
 
-    async sendToBackend(file) {
+    createProgressContainer() {
+        // Hapus progress container jika sudah ada
+        const existingProgress = document.getElementById('progressContainer');
+        if (existingProgress) existingProgress.remove();
+
+        const progressContainer = document.createElement('div');
+        progressContainer.id = 'progressContainer';
+        progressContainer.className = 'progress-container';
+        progressContainer.innerHTML = `
+            <div class="progress-text">0%</div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+        `;
+
+        // Tambah progress di atas file list
+        this.uploadList.parentNode.insertBefore(progressContainer, this.uploadList);
+    }
+
+    updateProgress() {
+        const progress = Math.round((this.currentProcessingIndex / this.totalFilesToProcess) * 100);
+        
+        // Update progress text
+        const progressText = document.querySelector('.progress-text');
+        if (progressText) {
+            progressText.textContent = `${progress}%`;
+        }
+
+        // Update progress bar
+        const progressBar = document.getElementById('progressBar');
+        if (progressBar) {
+            progressBar.style.width = `${progress}%`;
+        }
+
+        // Update button text
+        this.processBtn.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <div class="progress-circle"></div>
+                <span>Memproses... ${progress}%</span>
+            </div>
+        `;
+
+        // Update individual file status
+        this.updateFileProgressStatus(this.currentProcessingIndex - 1, progress);
+    }
+
+    updateFileProgressStatus(fileIndex, overallProgress) {
+        const fileItems = document.querySelectorAll('.file-item');
+        if (fileItems[fileIndex]) {
+            const statusElement = fileItems[fileIndex].querySelector('.status-text');
+            if (statusElement) {
+                if (overallProgress < 100) {
+                    statusElement.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <div class="uploading-animation" style="width: 12px; height: 12px;"></div>
+                            <span>Processing... ${overallProgress}%</span>
+                        </div>
+                    `;
+                } else {
+                    statusElement.innerHTML = '✅ Selesai diproses';
+                }
+            }
+        }
+    }
+
+    /*async sendToBackend(file) {
         const formData = new FormData();
         formData.append("file", file);
 
@@ -177,7 +277,40 @@ class FileUploader {
             download_pdf: result?.download_pdf || null,
             download_docx: result?.download_docx || null
         };
+    }*/
+    async sendToBackend(file) {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const response = await fetch("http://127.0.0.1:8000/api/upload", {
+                method: "POST",
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+            return {
+                file: result?.data?.file || file.name,
+                sections: result?.data?.sections || [],
+                download_pdf: result?.download_pdf || null,
+                download_docx: result?.download_docx || null
+            };
+        } catch (error) {
+            console.error('Upload error:', error);
+            ToastManager.showToast(`Gagal memproses ${file.name}`, 'error');
+            return {
+                file: file.name,
+                sections: [],
+                download_pdf: null,
+                download_docx: null
+            };
+        }
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => new FileUploader());
+
