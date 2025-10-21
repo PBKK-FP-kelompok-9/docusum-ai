@@ -458,8 +458,8 @@ body {
     font-style: italic;
     padding: 40px;
 }
-/* edit from here*/
-.progress-container {
+/* edit from here */
+/* .progress-container {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -497,4 +497,5 @@ body {
     border-radius: 3px;
     transition: width 0.3s ease;
     width: 0%;
-}
+} */
+
