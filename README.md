@@ -1,9 +1,11 @@
 # docusum-ai
 Meringkas dokumen Tugas Akhir (TA)
 
-https://docusum.vercel.app/
+https://docusum-ai.vercel.app/
 
-Jalankan pada terminal:
+Jika ingin menjalankan pada terminal lokal:
+- Ubah pada `frontend/result.html` baris 229  `const BASE_API = "https://docusum.onrender.com";` menjadi `const BASE_API = "http://localhost:8000";`
+- Nonaktifkan pada `backend/main.py` baris 448 `BASE_URL = "https://docusum.onrender.com"`
 - setx GOOGLE_API_KEY "AIzaSyAmwg5i1a3j5a1RkWtUvYmCLpqS6Fp58Qk"
 - Install segala yang tertera di `requierements.txt`
 - Terminal 1 (Backend): `cd backend` lalu `python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000`
@@ -13,6 +15,6 @@ Jalankan pada terminal:
 Catatan: 
 - Untuk komentar hanya berfungsi saat aplikasi sudah online, sesuai dengan `base_api/base URL`
 
-Saat ini semua berjalan di render;
+Saat ini semua berjalan di render:
 - Pada `frontend/result.html` baris 229  `const BASE_API = "https://docusum.onrender.com";`
-- Pada `backend/main.py` bari 448 `BASE_URL = "https://docusum.onrender.com"`
+- Pada `backend/main.py` baris 448 `BASE_URL = "https://docusum.onrender.com"`
