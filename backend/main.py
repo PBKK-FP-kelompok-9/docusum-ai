@@ -27,15 +27,15 @@ MAX_CONCURRENCY = 10
 MAX_RETRIES = 4
 RETRY_BASE_DELAY = 0.8
 GEMINI_TIMEOUT = 120
-MAX_INPUT_CHARS = 50000
+MAX_INPUT_CHARS = 25000 
 
 # ===================== ADAPTIVE FAST MODE CONFIG =====================
 ADAPTIVE_PARAGRAPH_RULE = {
-    "bab i": (5, 7),      # Pendahuluan
-    "bab ii": (6, 10),    # Tinjauan Pustaka
-    "bab iii": (5, 7),    # Metodologi
-    "bab iv": (6, 12),    # Hasil & Pembahasan
-    "bab v": (2, 4),      # Kesimpulan
+    "bab i": (4, 5),
+    "bab ii": (4, 6),
+    "bab iii": (4, 5),
+    "bab iv": (5, 7),
+    "bab v": (2, 3),
 }
 
 def get_adaptive_paragraph_count(bab_title: str) -> int:
@@ -293,7 +293,7 @@ async def gemini_summarize_async(content: str, semaphore: asyncio.Semaphore, bab
             else:
                 raise ValueError("Gemini output terlalu pendek, retry...")
         except Exception:
-            if attempt >= MAX_RETRIES:
+            if attempt >= 2:
                 return summarize_text_extractive(content, max_sent=8)  # fallback cepat
             await asyncio.sleep(RETRY_BASE_DELAY * attempt)
 
@@ -537,4 +537,5 @@ async def post_comment(comment: Dict[str, str]):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+
 
