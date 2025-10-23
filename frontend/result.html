@@ -27,8 +27,163 @@
       gap: 10px;
       margin-bottom: 10px;
     }
+
+    /* === Komentar Mini Carousel === */
+    .comment-section {
+      backdrop-filter: blur(8px);
+      background: rgba(255, 255, 255, 0.4);
+      border-radius: 10px;
+      padding: 10px 12px;
+      max-width: 240px;
+      margin: 25px auto 40px;
+      font-size: 13px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+      text-align: center;
+
+    }
+
+    .comment-input-container {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+      padding-bottom: 3px;
+    }
+
+    .emoji {
+      font-size: 18px;
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.2s ease;
+    }
+
+    .emoji:hover { transform: scale(1.2); }
+
+    .comment-input-container input {
+      flex: 1;
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: 13px;
+      padding: 4px;
+      color: #333;
+    }
+
+    .comment-input-container input::placeholder { color: #aaa; }
+
+    .emoji-picker {
+      display: none;
+      margin-top: 6px;
+      font-size: 18px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .emoji-picker span {
+      margin: 0 3px;
+      transition: transform 0.15s;
+    }
+
+    .emoji-picker span:hover { transform: scale(1.2); }
+
+    .comment-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-top: 6px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .comment-actions button {
+      border: none;
+      background: none;
+      font-size: 12.5px;
+      cursor: pointer;
+      color: #555;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+
+    .comment-actions #sendBtn {
+      background: #007bff;
+      color: white;
+      transition: background 0.25s;
+    }
+
+    .comment-actions #sendBtn:hover { background: #005fcc; }
+
+    .comment-actions.show { opacity: 1; }
+
+    /* === Carousel Style === */
+    .comments-display {
+      position: relative;
+      overflow: hidden;
+      width: fit-content;
+      width: 100%;
+
+      max-width: 420px;
+      margin: 12px auto;
+      text-align: center;
+    }
+
+    .comments-wrapper {
+      display: flex;
+
+
+      transition: transform 0.4s ease-in-out;
+    }
+
+    .comment-item {
+      flex: 0 0 100%;
+      display: inline-block;
+      max-width: 90%;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      white-space: pre-wrap;
+      box-sizing: border-box;
+      padding: 10px 14px;
+      font-size: 14px;
+      color: #333;
+      background: rgba(255, 255, 255, 0.65);
+      border-radius: 10px;
+      margin: 0 auto;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      text-align: left;
+
+
+    }
+
+    .comments-nav {
+      margin-top: 8px;
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    .nav-btn {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 18px;
+      color: #007bff;
+      opacity: 0.6;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+
+    .nav-btn:hover {
+      opacity: 1;
+      transform: scale(1.1);
+    }
+
+    .comment-empty {
+      color: gray;
+      font-size: 13px;
+    }
   </style>
 </head>
+
 <body>
   <div class="wavy-bg">
     <div class="wave wave-1"></div>
@@ -47,10 +202,31 @@
     </div>
 
     <main id="resultsContainer"></main>
+
+    <!-- === Komentar Mini (Carousel) === -->
+    <div class="comment-section">
+      <div class="comment-input-container">
+        <span class="emoji" id="emoji-btn">😊</span>
+        <input type="text" id="commentInput" placeholder="Tulis komentar..." />
+      </div>
+      <div class="emoji-picker" id="emojiPicker"></div>
+      <div class="comment-actions">
+        <button onclick="cancelComment()">Batal</button>
+        <button id="sendBtn" onclick="sendComment()">Kirim</button>
+      </div>
+
+      <div class="comments-display">
+        <div class="comments-wrapper" id="commentsWrapper"></div>
+        <div class="comments-nav">
+          <button id="prevBtn" class="nav-btn">←</button>
+          <button id="nextBtn" class="nav-btn">→</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
-    const BASE_API = "http://127.0.0.1:8000";
+    const BASE_API = "https://docusum.onrender.com";
     const container = document.getElementById("resultsContainer");
 
     function escapeHTML(t = "") {
@@ -76,14 +252,14 @@
       }
 
       container.innerHTML = results.map(doc => {
-        const pdfLink = doc.download_pdf ? `${BASE_API}${doc.download_pdf}` : null;
-        const docxLink = doc.download_docx ? `${BASE_API}${doc.download_docx}` : null;
+        const pdfLink = doc.download_pdf || null;
+        const docxLink = doc.download_docx || null;
 
         const downloadButtons = `
-		<div class="download-bar">
-		  ${pdfLink ? `<button class="btn-primary" onclick="downloadFile('${pdfLink}')">📥 Download PDF</button>` : ""}
-          ${docxLink ? `<button class="btn-primary" onclick="downloadFile('${docxLink}')">📥 Download DOCX</button>` : ""}
-	   </div>
+          <div class="download-bar">
+            ${pdfLink ? `<button class="btn-primary" onclick="downloadFile('${pdfLink}')">📥 Download PDF</button>` : ""}
+            ${docxLink ? `<button class="btn-primary" onclick="downloadFile('${docxLink}')">📥 Download DOCX</button>` : ""}
+          </div>
         `;
 
         const sections = (doc.sections || [])
@@ -106,18 +282,111 @@
                 </div>
               </div>
             </div>
-
             ${downloadButtons}
-
-            <div class="big-frame">
-              ${sections}
-            </div>
+            <div class="big-frame">${sections}</div>
           </div>
         `;
       }).join("");
     }
 
     render();
+
+    // === Komentar Carousel Logic ===
+    const input = document.getElementById("commentInput");
+    const actions = document.querySelector(".comment-actions");
+    const wrapper = document.getElementById("commentsWrapper");
+    const emojiBtn = document.getElementById("emoji-btn");
+    const emojiPicker = document.getElementById("emojiPicker");
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+
+    const emojis = ["😊","🔥","❤️","😂","👍","😎","🤓","💪","😉","🙏","👏","😅","🧐"];
+    let comments = [];
+    let currentIndex = 0;
+
+    emojiBtn.addEventListener("click", () => {
+      emojiPicker.style.display = emojiPicker.style.display === "none" ? "block" : "none";
+      if (emojiPicker.innerHTML === "") {
+        emojiPicker.innerHTML = emojis.map(e => `<span>${e}</span>`).join("");
+      }
+    });
+
+    emojiPicker.addEventListener("click", e => {
+      if (e.target.tagName === "SPAN") {
+        input.value += e.target.textContent;
+        emojiPicker.style.display = "none";
+        input.focus();
+      }
+    });
+
+    document.addEventListener("click", e => {
+      if (!emojiPicker.contains(e.target) && e.target !== emojiBtn) emojiPicker.style.display = "none";
+    });
+
+    input.addEventListener("focus", () => actions.classList.add("show"));
+    input.addEventListener("input", () => {
+      if (input.value.trim() === "") actions.classList.remove("show");
+    });
+
+    function cancelComment() {
+      input.value = "";
+      actions.classList.remove("show");
+    }
+
+    async function sendComment() {
+      const text = input.value.trim();
+      if (!text) return;
+      try {
+        await fetch(`${BASE_API}/api/comments`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ text })
+        });
+        input.value = "";
+        actions.classList.remove("show");
+        loadComments();
+      } catch {
+        alert("Gagal mengirim komentar.");
+      }
+    }
+
+    async function loadComments() {
+      try {
+        const res = await fetch(`${BASE_API}/api/comments`);
+        comments = await res.json();
+        if (!comments.length) {
+          wrapper.innerHTML = "<p class='comment-empty'>Belum ada komentar.</p>";
+        } else {
+          renderComment();
+        }
+      } catch {
+        wrapper.innerHTML = "<p style='color:red;'>Gagal memuat komentar.</p>";
+      }
+    }
+
+    function renderComment() {
+      if (!comments.length) return;
+      const comment = comments[currentIndex];
+      wrapper.innerHTML = `
+        <div class="comment-item">
+          ${escapeHTML(comment.text)}
+        </div>
+      `;
+    }
+
+    prevBtn.addEventListener("click", () => {
+      if (!comments.length) return;
+      currentIndex = (currentIndex - 1 + comments.length) % comments.length;
+      renderComment();
+    });
+
+    nextBtn.addEventListener("click", () => {
+      if (!comments.length) return;
+      currentIndex = (currentIndex + 1) % comments.length;
+      renderComment();
+    });
+
+    loadComments();
   </script>
 </body>
 </html>
