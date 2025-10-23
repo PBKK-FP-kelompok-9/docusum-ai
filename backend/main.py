@@ -351,7 +351,7 @@ app.add_middleware(
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
-BASE_URL = "https://docusum.onrender.com"
+BASE_URL = "https://docusum-ai.onrender.com"
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -437,3 +437,4 @@ async def post_comment(comment: Dict[str, str]):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+
