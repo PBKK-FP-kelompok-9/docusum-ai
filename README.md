@@ -12,6 +12,7 @@ Jalankan pada terminal:
 
 Catatan: 
 - Untuk komentar hanya berfungsi saat aplikasi sudah online, sesuai dengan `base_api/base URL`
+
 Saat ini semua berjalan di render;
 - Pada `frontend/result.html` baris 229  `const BASE_API = "https://docusum.onrender.com";`
 - Pada `backend/main.py` bari 448 `BASE_URL = "https://docusum.onrender.com"`
