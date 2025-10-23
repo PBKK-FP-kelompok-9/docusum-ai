@@ -29,25 +29,6 @@ RETRY_BASE_DELAY = 0.8
 GEMINI_TIMEOUT = 120
 MAX_INPUT_CHARS = 50000
 
-# ===================== ADAPTIVE FAST MODE CONFIG =====================
-ADAPTIVE_PARAGRAPH_RULE = {
-    "bab i": (5, 7),      # Pendahuluan
-    "bab ii": (6, 10),    # Tinjauan Pustaka
-    "bab iii": (5, 7),    # Metodologi
-    "bab iv": (6, 12),    # Hasil & Pembahasan
-    "bab v": (2, 4),      # Kesimpulan
-}
-
-def get_adaptive_paragraph_count(bab_title: str) -> int:
-    bab = bab_title.lower().strip()
-    for key, (min_p, max_p) in ADAPTIVE_PARAGRAPH_RULE.items():
-        if key in bab:
-            return max_p  # pakai batas maksimum biar isi lebih lengkap
-    return 5  # default aman
-
-def clean_bab_title(title: str) -> str:
-    return title.replace("–", "-").replace("…", "").strip()
-
 # Ekstraksi PDF
 def read_pdf_text(path: str) -> str:
     text = ""
@@ -220,47 +201,33 @@ def summarize_text_extractive(text: str, max_sent: int = 8) -> str:
     return " ".join([sents[i] for i in sorted(top_idx)])
 
 # Prompt Gemini
-# ===================== ADAPTIVE GEMINI PROMPT =====================
-SUM_PROMPT_TEMPLATE = """
-Tugas kamu adalah merangkum isi {bab_title} dari dokumen ilmiah (skripsi) secara akademik.
-Ringkasan harus disusun runtut sesuai konteks isi bab dan tidak hanya mengambil bagian awal saja.
-Gunakan bahasa ilmiah yang natural seperti skripsi kampus dan tidak terdeteksi AI.
-
-WAJIB:
-- {max_paragraphs} paragraf sesuai aturan BAB
-- Bahasa ilmiah formal
-- Tidak menambah teori baru
-- Tidak mengubah makna isi
-- Tidak copy paste kalimat
-
-HAPUS:
-- Daftar pustaka, referensi, (Nama, Tahun)
-- URL/link
-- Nomor tabel/gambar/lampiran
-- Isi yang tidak relevan
-
-TEKS SUMBER (TERPILIH):
-\"\"\"{content}\"\"\"
-
-HASIL RINGKASAN:
-"""
-
-# ===================== ADAPTIVE PARAGRAPH CONTROL PER BAB =====================
-def estimate_paragraph_count(bab_title: str, content: str) -> int:
-    length = len(content)
-
-    if "bab i" in bab_title.lower():
-        return 5 if length < 8000 else 7
-    elif "bab ii" in bab_title.lower():
-        return 6 if length < 12000 else 10
-    elif "bab iii" in bab_title.lower():
-        return 5 if length < 9000 else 7
-    elif "bab iv" in bab_title.lower():
-        return 6 if length < 15000 else 12
-    elif "bab v" in bab_title.lower():
-        return 2 if length < 5000 else 4
-    else:
-        return 4  # fallback aman
+SUM_PROMPT_TEMPLATE = (
+    "Tugas kamu adalah merangkum isi BAB dari dokumen ilmiah secara akademik. "
+    "Abaikan semua teks yang tidak relevan dengan isi BAB.\n\n"
+    "PANDUAN ISI PER BAB:\n"
+    "- Jika teks adalah BAB 1 (Pendahuluan), ringkas: latar belakang, rumusan masalah, tujuan, manfaat, ruang lingkup.\n"
+    "- Jika teks adalah BAB 2 (Tinjauan Pustaka), ringkas: teori utama, konsep penting, penelitian terdahulu, kerangka pemikiran.\n"
+    "- Jika teks adalah BAB 3 (Metodologi), ringkas: metode penelitian, data/sampel, teknik analisis.\n"
+    "- Jika teks adalah BAB 4 (Hasil dan Pembahasan), ringkas: hasil penelitian dan analisis pembahasan.\n"
+    "- Jika teks adalah BAB 5 (Kesimpulan dan Saran), ringkas: kesimpulan penelitian dan saran, JANGAN MASUKKAN DAFTAR PUSTAKA, REFERENSI, DAN SEJENISNYA.\n\n"
+    "WAJIB DIBUANG dan JANGAN DITAMPILKAN dalam ringkasan:\n"
+    "- URL atau tautan web\n"
+    "- Daftar pustaka atau sumber referensi\n"
+    "- Nama penulis + tahun\n"
+    "- Nomor tabel/gambar/lampiran\n"
+    "- Data teknis tidak penting\n\n"
+    "FOKUS RINGKAS:\n"
+    "- Tangkap inti dan tujuan dari isi bab\n"
+    "- RINGKAS POINT PENTING saja\n"
+    "- Jangan memotong kalimat\n"
+    "- Harus berakhir dengan kalimat lengkap\n\n"
+    "FORMAT WAJIB:\n"
+    "- 1–3 paragraf koheren dan mengalir\n"
+    "- Tidak boleh berupa poin\n"
+    "- Bahasa ilmiah\n\n"
+    "TEKS SUMBER:\n\"\"\"{content}\"\"\"\n\n"
+    "RINGKASAN:\n"
+)
 
 def _gemini_call_sync(prompt: str) -> str:
     resp = _model.generate_content(
@@ -272,30 +239,22 @@ def _gemini_call_sync(prompt: str) -> str:
 
 import asyncio, time
 
-async def gemini_summarize_async(content: str, semaphore: asyncio.Semaphore, bab_title: str):
-    max_paragraphs = estimate_paragraph_count(bab_title, content)
-
-    prompt = SUM_PROMPT_TEMPLATE.format(
-        bab_title=bab_title,
-        content=content,
-        max_paragraphs=max_paragraphs 
-    )
-
+async def gemini_summarize_async(content: str, semaphore: asyncio.Semaphore) -> str:
+    prompt = SUM_PROMPT_TEMPLATE.format(content=content)
     attempt = 0
     while True:
         attempt += 1
         try:
             async with semaphore:
                 result = await asyncio.to_thread(_gemini_call_sync, prompt)
-
-            if result and len(result.strip()) > 120:
-                return result.strip()  # berhasil
-            else:
-                raise ValueError("Gemini output terlalu pendek, retry...")
+            if result:
+                return result
+            raise RuntimeError("Empty response from Gemini.")
         except Exception:
             if attempt >= MAX_RETRIES:
-                return summarize_text_extractive(content, max_sent=8)  # fallback cepat
-            await asyncio.sleep(RETRY_BASE_DELAY * attempt)
+                return summarize_text_extractive(content, max_sent=7)
+            delay = min(RETRY_BASE_DELAY * (2 ** (attempt - 1)), 8.0)
+            time.sleep(delay)
 
 # Pre-Compress per BAB
 def compress_for_prompt(text: str, max_chars: int = MAX_INPUT_CHARS) -> str:
@@ -306,82 +265,6 @@ def compress_for_prompt(text: str, max_chars: int = MAX_INPUT_CHARS) -> str:
     if len(extract) > max_chars:
         extract = extract[:max_chars]
     return extract
-
-def hard_clean_output(text: str) -> str:
-    # Buang header sampah yang sering kebawa
-    text = re.sub(r"(?i)^(DAFTAR\s+ISI|BAB\s+[IVXLCDM]+|HALAMAN\s+JUDUL|KATA\s+PENGANTAR|LEMBAR\s+PENGESAHAN).*", "", text, flags=re.MULTILINE)
-    # Buang titik titik daftar isi
-    text = re.sub(r"\.{5,}", "", text)
-    # Hapus nomor halaman sisa
-    text = re.sub(r"^\s*\d+\s*$", "", text, flags=re.MULTILINE)
-    # Hapus tanda kurung referensi sisa [1], (2), dsb
-    text = re.sub(r"\[\d+\]|\(\d+\)", "", text)
-    # Rapikan spasi
-    text = re.sub(r"[ ]{2,}", " ", text)
-    # Rapikan newline
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    # Hilangkan spasi sebelum tanda baca
-    text = re.sub(r" \,", ",", text)
-    text = re.sub(r" \.", ".", text)
-    text = re.sub(r" \;", ";", text)
-    text = re.sub(r" \:", ":", text)
-    return text.strip()
-
-# ===================== AUTO FILTER SPAM & DAFTAR ISI =====================
-def auto_filter_noise(text: str) -> str:
-    banned_patterns = [
-        r"daftar isi", r"lembar pengesahan", r"abstrak", r"kata pengantar",
-        r"lembar persetujuan", r"pernyataan keaslian", r"universitas", r"fakultas",
-        r"program studi", r"jurusan", r"pembimbing", r"nim", r"nip", r"dosen",
-        r"lampiran", r"daftar pustaka", r"universitas .*?\n", r"bab i pendahuluan"
-    ]
-    for pattern in banned_patterns:
-        text = re.sub(pattern, "", text, flags=re.IGNORECASE)
-    return text.strip()
-
-# ===================== AUTO MERGE SHORT SENTENCES =====================
-def merge_short_sentences(text: str, min_len: int = 40) -> str:
-    sentences = re.split(r'(?<=[.!?])\s+', text)
-    merged = []
-    buffer = ""
-
-    for s in sentences:
-        if len(s) < min_len:
-            buffer += " " + s
-        else:
-            if buffer:
-                merged.append((buffer + " " + s).strip())
-                buffer = ""
-            else:
-                merged.append(s.strip())
-    if buffer:
-        merged.append(buffer.strip())
-
-    return " ".join(merged)
-
-# ===================== HUMANIZE FINAL (ANTI KOPAS + NATURAL) =====================
-async def humanize_final(text: str, semaphore):
-    prompt = f"""
-    Ubah teks berikut agar lebih alami seperti tulisan manusia namun tetap formal akademik.
-    Jangan ubah makna ilmiah, cukup variasikan struktur kalimat agar tidak terdeteksi AI
-    dan tidak mirip sumber asli.
-
-    Aturan:
-    - Jangan gunakan gaya AI seperti: "Selain itu", "Secara keseluruhan", "Dengan demikian"
-    - Hindari pengulangan frasa
-    - Perbaiki alur antar kalimat agar mengalir
-    - Gaya bahasa seperti skripsi kampus Indonesia
-
-    Teks:
-    \"\"\"{text}\"\"\"
-
-    Versi final natural dan aman:
-    """
-    try:
-        async with semaphore:
-            return await asyncio.to_thread(_gemini_call_sync, prompt)
-    except:
-        return text
 
 # Ringkas Per BAB (paralel)
 async def summarize_sections_parallel(sections: List[Dict[str, str]]) -> List[Dict[str, Any]]:
@@ -398,20 +281,14 @@ async def summarize_sections_parallel(sections: List[Dict[str, str]]) -> List[Di
             return {"judul": sec.get("judul", ""), "ringkasan_bab": ""}
 
         isi_bersih = clean_reference_noise(isi_bersih)
+
         compressed = compress_for_prompt(isi_bersih, MAX_INPUT_CHARS)
-
-        summary = await gemini_summarize_async(compressed, semaphore, sec.get("judul", ""))
-
-        summary = hard_clean_output(summary)  
-        summary = auto_filter_noise(summary)
-        summary = merge_short_sentences(summary)
-
-        summary = await humanize_final(summary, semaphore)
-
+        summary = await gemini_summarize_async(compressed, semaphore)
         return {"judul": sec.get("judul", ""), "ringkasan_bab": summary}
 
     tasks = [asyncio.create_task(_process(sec)) for sec in sections]
-    return await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks)
+    return results
 
 # Driver: ringkas PDF per BAB
 async def summarize_pdf_per_bab(path: str):
@@ -509,7 +386,7 @@ async def download_file(filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File tidak ditemukan")
     return FileResponse(file_path, filename=filename)
-
+	
 # ===================== KOMENTAR GLOBAL (TERSIMPAN PERMANEN) =====================
 import json
 from datetime import datetime
