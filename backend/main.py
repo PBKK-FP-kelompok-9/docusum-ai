@@ -9,7 +9,7 @@ from typing import List, Dict, Any
 
 # Gemini Setup
 import google.generativeai as genai
-GEMINI_MODEL = "gemini-1.5-flash"
+GEMINI_MODEL = "gemini-2.5-flash"
 API_KEY = os.getenv("GOOGLE_API_KEY")
 if not API_KEY:
     raise RuntimeError("GOOGLE_API_KEY belum diset.")
@@ -27,15 +27,15 @@ MAX_CONCURRENCY = 10
 MAX_RETRIES = 4
 RETRY_BASE_DELAY = 0.8
 GEMINI_TIMEOUT = 120
-MAX_INPUT_CHARS = 25000 
+MAX_INPUT_CHARS = 50000
 
 # ===================== ADAPTIVE FAST MODE CONFIG =====================
 ADAPTIVE_PARAGRAPH_RULE = {
-    "bab i": (4, 5),
-    "bab ii": (4, 6),
-    "bab iii": (4, 5),
-    "bab iv": (5, 7),
-    "bab v": (2, 3),
+    "bab i": (5, 7),      # Pendahuluan
+    "bab ii": (6, 10),    # Tinjauan Pustaka
+    "bab iii": (5, 7),    # Metodologi
+    "bab iv": (6, 12),    # Hasil & Pembahasan
+    "bab v": (2, 4),      # Kesimpulan
 }
 
 def get_adaptive_paragraph_count(bab_title: str) -> int:
@@ -224,11 +224,11 @@ def summarize_text_extractive(text: str, max_sent: int = 8) -> str:
 SUM_PROMPT_TEMPLATE = """
 Tugas kamu adalah merangkum isi {bab_title} dari dokumen ilmiah (skripsi) secara akademik.
 Ringkasan harus disusun runtut sesuai konteks isi bab dan tidak hanya mengambil bagian awal saja.
-Gunakan bahasa ilmiah formal namun alami seperti tulisan mahasiswa skripsi (tidak kaku dan tidak terdeteksi AI).
+Gunakan bahasa ilmiah yang natural seperti skripsi kampus dan tidak terdeteksi AI.
 
 WAJIB:
 - {max_paragraphs} paragraf sesuai aturan BAB
-- Bahasa ilmiah formal dan mengalir alami
+- Bahasa ilmiah formal
 - Tidak menambah teori baru
 - Tidak mengubah makna isi
 - Tidak copy paste kalimat
@@ -293,7 +293,7 @@ async def gemini_summarize_async(content: str, semaphore: asyncio.Semaphore, bab
             else:
                 raise ValueError("Gemini output terlalu pendek, retry...")
         except Exception:
-            if attempt >= 2:
+            if attempt >= MAX_RETRIES:
                 return summarize_text_extractive(content, max_sent=8)  # fallback cepat
             await asyncio.sleep(RETRY_BASE_DELAY * attempt)
 
@@ -334,12 +334,9 @@ def auto_filter_noise(text: str) -> str:
         r"lembar persetujuan", r"pernyataan keaslian", r"universitas", r"fakultas",
         r"program studi", r"jurusan", r"pembimbing", r"nim", r"nip", r"dosen",
         r"lampiran", r"daftar pustaka", r"universitas .*?\n", r"bab i pendahuluan"
-
-
     ]
     for pattern in banned_patterns:
         text = re.sub(pattern, "", text, flags=re.IGNORECASE)
-
     return text.strip()
 
 # ===================== AUTO MERGE SHORT SENTENCES =====================
@@ -361,6 +358,30 @@ def merge_short_sentences(text: str, min_len: int = 40) -> str:
         merged.append(buffer.strip())
 
     return " ".join(merged)
+
+# ===================== HUMANIZE FINAL (ANTI KOPAS + NATURAL) =====================
+async def humanize_final(text: str, semaphore):
+    prompt = f"""
+    Ubah teks berikut agar lebih alami seperti tulisan manusia namun tetap formal akademik.
+    Jangan ubah makna ilmiah, cukup variasikan struktur kalimat agar tidak terdeteksi AI
+    dan tidak mirip sumber asli.
+
+    Aturan:
+    - Jangan gunakan gaya AI seperti: "Selain itu", "Secara keseluruhan", "Dengan demikian"
+    - Hindari pengulangan frasa
+    - Perbaiki alur antar kalimat agar mengalir
+    - Gaya bahasa seperti skripsi kampus Indonesia
+
+    Teks:
+    \"\"\"{text}\"\"\"
+
+    Versi final natural dan aman:
+    """
+    try:
+        async with semaphore:
+            return await asyncio.to_thread(_gemini_call_sync, prompt)
+    except:
+        return text
 
 # Ringkas Per BAB (paralel)
 async def summarize_sections_parallel(sections: List[Dict[str, str]]) -> List[Dict[str, Any]]:
@@ -384,6 +405,8 @@ async def summarize_sections_parallel(sections: List[Dict[str, str]]) -> List[Di
         summary = hard_clean_output(summary)  
         summary = auto_filter_noise(summary)
         summary = merge_short_sentences(summary)
+
+        summary = await humanize_final(summary, semaphore)
 
         return {"judul": sec.get("judul", ""), "ringkasan_bab": summary}
 
