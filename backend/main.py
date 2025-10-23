@@ -224,11 +224,11 @@ def summarize_text_extractive(text: str, max_sent: int = 8) -> str:
 SUM_PROMPT_TEMPLATE = """
 Tugas kamu adalah merangkum isi {bab_title} dari dokumen ilmiah (skripsi) secara akademik.
 Ringkasan harus disusun runtut sesuai konteks isi bab dan tidak hanya mengambil bagian awal saja.
-Gunakan bahasa ilmiah yang natural seperti skripsi kampus dan tidak terdeteksi AI.
+Gunakan bahasa ilmiah formal namun alami seperti tulisan mahasiswa skripsi (tidak kaku dan tidak terdeteksi AI).
 
 WAJIB:
 - {max_paragraphs} paragraf sesuai aturan BAB
-- Bahasa ilmiah formal
+- Bahasa ilmiah formal dan mengalir alami
 - Tidak menambah teori baru
 - Tidak mengubah makna isi
 - Tidak copy paste kalimat
@@ -362,30 +362,6 @@ def merge_short_sentences(text: str, min_len: int = 40) -> str:
 
     return " ".join(merged)
 
-# ===================== HUMANIZE =====================
-async def humanize_final(text: str, semaphore):
-    prompt = f"""
-    Ubah teks berikut agar lebih alami seperti tulisan manusia namun tetap formal akademik.
-    Jangan ubah makna ilmiah, cukup variasikan struktur kalimat agar tidak terdeteksi AI
-    dan tidak mirip sumber asli.
-
-    Aturan:
-    - Jangan gunakan gaya AI seperti: "Selain itu", "Secara keseluruhan", "Dengan demikian"
-    - Hindari pengulangan frasa
-    - Perbaiki alur antar kalimat agar mengalir
-    - Gaya bahasa seperti skripsi kampus Indonesia
-
-    Teks:
-    \"\"\"{text}\"\"\"
-
-    Versi final natural dan aman:
-    """
-    try:
-        async with semaphore:
-            return await asyncio.to_thread(_gemini_call_sync, prompt)
-    except:
-        return text
-
 # Ringkas Per BAB (paralel)
 async def summarize_sections_parallel(sections: List[Dict[str, str]]) -> List[Dict[str, Any]]:
     semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
@@ -408,8 +384,6 @@ async def summarize_sections_parallel(sections: List[Dict[str, str]]) -> List[Di
         summary = hard_clean_output(summary)  
         summary = auto_filter_noise(summary)
         summary = merge_short_sentences(summary)
-
-        summary = await humanize_final(summary, semaphore)
 
         return {"judul": sec.get("judul", ""), "ringkasan_bab": summary}
 
@@ -563,3 +537,4 @@ async def post_comment(comment: Dict[str, str]):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+
